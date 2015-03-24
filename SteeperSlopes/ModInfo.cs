@@ -67,7 +67,6 @@ namespace SteeperSlopes
             SetFields(newAI, fields);
 
             ni.m_maxSlope = ni.m_maxSlope > 0.5f ? ni.m_maxSlope : Math.Min(0.5f, ni.m_maxSlope * 2);
-            ni.m_maxHeight *= 20;
 
             newAI.m_info = ni;
             ni.m_netAI = newAI;
