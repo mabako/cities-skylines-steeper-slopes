@@ -1,16 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace SteeperSlopes
+﻿namespace SteeperSlopes
 {
-    public class CustomTrainTrackAI : TrainTrackAI
+    internal class CustomTrainTrackAI
     {
-        public override void GetElevationLimits(out int min, out int max)
+        private static void GetElevationLimits(TrainTrackAI ai, out int min, out int max)
         {
             min = 0;
-            max = 20; // 5
+            max = ModInfo.IsEnabled ? 20 : 5;
         }
     }
 }

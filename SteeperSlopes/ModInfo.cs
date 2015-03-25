@@ -1,12 +1,17 @@
-﻿using ColossalFramework.Plugins;
+﻿using CitiesSkylinesDetour;
+using ColossalFramework.Plugins;
 using ICities;
 using System;
-using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using UnityEngine;
 
 namespace SteeperSlopes
 {
     public class ModInfo : IUserMod
     {
+        public static bool IsEnabled;
+
         public string Description
         {
             get
@@ -19,81 +24,78 @@ namespace SteeperSlopes
         {
             get
             {
+                Setup();
                 return "Steeper Slopes & Higher Bridges";
+            }
+        }
+
+        private void Setup()
+        {
+            try
+            {
+                RedirectCalls(typeof(RoadAI), typeof(CustomRoadAI), "GetElevationLimits");
+                RedirectCalls(typeof(TrainTrackAI), typeof(CustomTrainTrackAI), "GetElevationLimits");
+                RedirectCalls(typeof(PedestrianPathAI), typeof(CustomPedestrianPathAI), "GetElevationLimits");
+
+                // We should probably check if we're enabled
+                PluginsChanged();
+                PluginManager.instance.eventPluginsChanged += PluginsChanged;
+                PluginManager.instance.eventPluginsStateChanged += PluginsChanged;
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                DebugOutputPanel.AddMessage(PluginManager.MessageType.Warning, "[SteeperSlopes] " + e.GetType() + ": " + e.Message);
+            }
+        }
+
+        private void RedirectCalls(Type type1, Type type2, string p)
+        {
+            //Debug.LogFormat("{0}/{1}/{2}", type1, type2, p);
+            RedirectionHelper.RedirectCalls(type1.GetMethod(p, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static), type2.GetMethod(p, BindingFlags.NonPublic | BindingFlags.Static));
+        }
+
+        private void PluginsChanged()
+        {
+            try
+            {
+                PluginManager.PluginInfo pi = PluginManager.instance.GetPluginsInfo().Where(p => p.publishedFileID.AsUInt64 == 412920038L).FirstOrDefault();
+                if (pi != null)
+                {
+                    IsEnabled = pi.isEnabled;
+                }
+                else
+                {
+                    IsEnabled = false;
+                    DebugOutputPanel.AddMessage(PluginManager.MessageType.Message, "[SteeperSlopes] Can't find self. No idea if this mod is enabled.");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                DebugOutputPanel.AddMessage(PluginManager.MessageType.Warning, "[SteeperSlopes] " + e.GetType() + ": " + e.Message);
             }
         }
     }
 
 
-    // HUGE Thanks to sschoener for https://github.com/sschoener/cities-skylines-no-despawn
     public class Initialization : LoadingExtensionBase
     {
         public override void OnLevelLoaded(LoadMode mode)
         {
             if (mode != LoadMode.LoadGame && mode != LoadMode.NewGame)
                 return;
-            var mapping = new Dictionary<Type, Type>
-            {
-                {typeof (RoadAI), typeof (CustomRoadAI)},
-                {typeof (TrainTrackAI), typeof (CustomTrainTrackAI)},
-                {typeof (PedestrianPathAI), typeof (PedestrianPathAIWrapper)}
-            };
 
-            int num = PrefabCollection<VehicleInfo>.PrefabCount();
+
+            int num = PrefabCollection<NetInfo>.PrefabCount();
             for (int index = 0; index < PrefabCollection<NetInfo>.LoadedCount(); ++index)
             {
                 NetInfo ni = PrefabCollection<NetInfo>.GetLoaded((uint)index);
-                
-                ReplaceAI(ni, mapping);
-            }
-        }
 
-        private void ReplaceAI(NetInfo ni, Dictionary<Type, Type> componentRemap)
-        {
-            var oldAI = ni.GetComponent<NetAI>();
-            if (oldAI == null)
-                return;
-
-            var compType = oldAI.GetType();
-            Type newCompType;
-            if (!componentRemap.TryGetValue(compType, out newCompType))
-                return;
-
-            var fields = ExtractFields(oldAI);
-
-            UnityEngine.Object.DestroyImmediate(oldAI);
-
-            NetAI newAI = ni.gameObject.AddComponent(newCompType) as NetAI;
-            SetFields(newAI, fields);
-
-            ni.m_maxSlope = ni.m_maxSlope > 0.5f ? ni.m_maxSlope : Math.Min(0.5f, ni.m_maxSlope * 2);
-
-            newAI.m_info = ni;
-            ni.m_netAI = newAI;
-        }
-
-        private Dictionary<string, object> ExtractFields(object a)
-        {
-            var fields = a.GetType().GetFields();
-            var dict = new Dictionary<string, object>(fields.Length);
-            for (int i = 0; i < fields.Length; i++)
-            {
-                var af = fields[i];
-                dict[af.Name] = af.GetValue(a);
-            }
-            return dict;
-        }
-
-        private void SetFields(object b, Dictionary<string, object> fieldValues)
-        {
-            var bType = b.GetType();
-            foreach (var kvp in fieldValues)
-            {
-                var bf = bType.GetField(kvp.Key);
-                if (bf == null)
+                if (ni == null)
                     continue;
 
-                bf.SetValue(b, kvp.Value);
+                ni.m_maxSlope = ni.m_maxSlope > 0.5f ? ni.m_maxSlope : Math.Min(0.5f, ni.m_maxSlope * 2);
             }
         }
     }
